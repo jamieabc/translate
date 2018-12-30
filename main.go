@@ -67,7 +67,7 @@ func main() {
 	translateStartIdx := 0
 	str := bytes.NewBuffer(content).String()
 
-	for true {
+	for {
 
 		// data := strings.Split(str, "\n")
 		subStr, translateEndIdx := truncateWords(str, translateStartIdx)
