@@ -16,6 +16,7 @@ import (
 const (
 	apiRequestLimit = 7000
 	targteLang      = "zh-TW"
+	outputFile      = "out.txt"
 )
 
 func printHelp() {
@@ -66,6 +67,11 @@ func main() {
 
 	translateStartIdx := 0
 	str := bytes.NewBuffer(content).String()
+	f, err := os.Create(outputFile)
+	if nil != err {
+		log.Fatalf("Failed to create output file %s: %v", outputFile, err)
+	}
+	defer f.Close()
 
 	for {
 
@@ -80,8 +86,10 @@ func main() {
 		}
 
 		for _, str := range translation {
-			fmt.Println(str.Text)
+			f.WriteString(str.Text)
+			f.WriteString("\n")
 		}
+		f.Sync()
 
 		if translateEndIdx >= len(str) {
 			break
