@@ -1,10 +1,9 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -38,18 +37,19 @@ func checkArgs(args []string) (string, error) {
 
 func main() {
 	args := os.Args[1:]
-	fileName, err := checkArgs(args)
+	sourceFile, err := checkArgs(args)
 
 	if nil != err {
 		fmt.Printf("\n%s\n\n", err.Error())
 		return
 	}
 
-	content, err := ioutil.ReadFile(fileName)
+	f, err := os.Open(sourceFile)
 	if nil != err {
-		fmt.Printf("\n%s\n\n", err.Error())
+		fmt.Printf("open %s with error: %s\n", sourceFile, err)
 		return
 	}
+	reader := bufio.NewReader(f)
 
 	ctx := context.Background()
 
@@ -65,39 +65,39 @@ func main() {
 		log.Fatalf("Failed to parse target language: %v", err)
 	}
 
-	translateStartIdx := 0
-	str := bytes.NewBuffer(content).String()
-	f, err := os.Create(outputFile)
+	destFile, err := os.Create(outputFile)
 	if nil != err {
 		log.Fatalf("Failed to create output file %s: %v", outputFile, err)
 	}
-	defer f.Close()
+	defer destFile.Close()
+
+	exit := false
 
 	for {
-
-		// data := strings.Split(str, "\n")
-		subStr, translateEndIdx := truncateWords(str, translateStartIdx)
-		data := strings.Split(subStr, "\n")
+		data, err := reader.Peek(apiRequestLimit)
+		if 0 != len(data) && nil != err {
+			fmt.Printf("read file with error: %s", err)
+			exit = true
+		}
+		strs := strings.Split(string(data), "\n")
+		fmt.Printf("strings: %v\n", strs)
 
 		// translate
-		translation, err := client.Translate(ctx, data, lan, nil)
+		translated, err := client.Translate(ctx, strs, lan, nil)
 		if nil != err {
 			log.Fatalf("Failed to translate text: %v", err)
 		}
 
-		for _, str := range translation {
-			f.WriteString(str.Text)
-			f.WriteString("\n")
+		for _, s := range translated {
+			destFile.WriteString(s.Text)
+			destFile.WriteString("\n")
 		}
-		f.Sync()
+		destFile.Sync()
 
-		if translateEndIdx >= len(str) {
+		if exit {
 			break
-		} else {
-			translateStartIdx = translateEndIdx
 		}
 	}
-
 }
 
 func truncateWords(str string, start int) (string, int) {
