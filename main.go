@@ -14,7 +14,7 @@ import (
 
 const (
 	apiRequestLimit = 7000
-	targteLang      = "zh-TW"
+	targetLang      = "zh-TW"
 	outputFile      = "out.txt"
 )
 
@@ -60,7 +60,7 @@ func main() {
 	}
 
 	// get text to translate
-	lan, err := language.Parse(targteLang)
+	lan, err := language.Parse(targetLang)
 	if nil != err {
 		log.Fatalf("Failed to parse target language: %v", err)
 	}
