@@ -1,9 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -13,8 +14,8 @@ import (
 )
 
 const (
-	apiRequestLimit = 7000
-	targteLang      = "zh-TW"
+	apiRequestLimit = 2000
+	targetLang      = "zh-TW"
 	outputFile      = "out.txt"
 )
 
@@ -44,13 +45,6 @@ func main() {
 		return
 	}
 
-	f, err := os.Open(sourceFile)
-	if nil != err {
-		fmt.Printf("open %s with error: %s\n", sourceFile, err)
-		return
-	}
-	reader := bufio.NewReader(f)
-
 	ctx := context.Background()
 
 	// create a client
@@ -60,7 +54,7 @@ func main() {
 	}
 
 	// get text to translate
-	lan, err := language.Parse(targteLang)
+	lan, err := language.Parse(targetLang)
 	if nil != err {
 		log.Fatalf("Failed to parse target language: %v", err)
 	}
@@ -71,16 +65,19 @@ func main() {
 	}
 	defer destFile.Close()
 
-	exit := false
+	data, err := ioutil.ReadFile(sourceFile)
+	if nil != err {
+		fmt.Printf("read file with error: %s\n", err)
+		return
+	}
 
-	for {
-		data, err := reader.Peek(apiRequestLimit)
-		if 0 != len(data) && nil != err {
-			fmt.Printf("read file with error: %s", err)
-			exit = true
-		}
-		strs := strings.Split(string(data), "\n")
-		fmt.Printf("strings: %v\n", strs)
+	startIndex := 0
+	for startIndex < len(data)-1 {
+		bs, nextIndex := truncateWords(data, startIndex)
+		strs := strings.Split(string(bs), "\n")
+		startIndex = nextIndex
+
+		//fmt.Printf("strs: %s\n\n", strs)
 
 		// translate
 		translated, err := client.Translate(ctx, strs, lan, nil)
@@ -93,26 +90,18 @@ func main() {
 			destFile.WriteString("\n")
 		}
 		destFile.Sync()
-
-		if exit {
-			break
-		}
 	}
 }
 
-func truncateWords(str string, start int) (string, int) {
-	length := len(str)
+func truncateWords(bs []byte, startIndex int) ([]byte, int) {
+	var endIndex int
+	length := len(bs[startIndex:])
 	if length <= apiRequestLimit {
-		return str, length - 1
-	}
-
-	var endIdx int
-	if start+apiRequestLimit >= length {
-		endIdx = length
+		endIndex = startIndex + length - 1
 	} else {
-		endIdx = start + apiRequestLimit
+		endIndex = startIndex + apiRequestLimit - 1
 	}
 
-	offsetIdx := strings.LastIndex(str[start:endIdx], "\n")
-	return str[start : start+offsetIdx], start + offsetIdx + 1
+	offsetIdx := bytes.LastIndex(bs[startIndex:endIndex+1], []byte{'\n'})
+	return bs[startIndex : startIndex+offsetIdx+1], startIndex + offsetIdx + 1
 }
