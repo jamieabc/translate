@@ -8,32 +8,22 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/translate"
 	"golang.org/x/text/language"
 )
 
 const (
-	apiRequestLimit = 2000
-	targetLang      = "zh-TW"
-	outputFile      = "out.txt"
+	apiRequestLimit  = 2000 // max total characters per request
+	textSegmentLimit = 128  // max words per request
+	apiRatePerSecond = 10   // aip requests / second
+	targetLang       = "zh-TW"
+	outputFile       = "out.txt"
 )
 
 func printHelp() {
 	fmt.Printf("\nUsage: translate file_name\n")
-}
-
-func checkArgs(args []string) (string, error) {
-	if 0 == len(args) {
-		printHelp()
-		return "", fmt.Errorf("Error: Insufficient argument")
-	}
-
-	fileName := args[0]
-	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		return "", fmt.Errorf("Error: file '%s' not exist", fileName)
-	}
-	return fileName, nil
 }
 
 func main() {
@@ -71,19 +61,23 @@ func main() {
 		return
 	}
 
+	sleepTimeMS := float64(1000) / apiRatePerSecond
+
 	startIndex := 0
 	for startIndex < len(data)-1 {
 		bs, nextIndex := truncateWords(data, startIndex)
 		strs := strings.Split(string(bs), "\n")
 		startIndex = nextIndex
 
-		//fmt.Printf("strs: %s\n\n", strs)
+		// fmt.Printf("strings to translate: %s\n\n", strs)
 
 		// translate
 		translated, err := client.Translate(ctx, strs, lan, nil)
 		if nil != err {
-			log.Fatalf("Failed to translate text: %v", err)
+			log.Fatalf("error: %v", err)
 		}
+
+		time.Sleep(time.Duration(sleepTimeMS) * time.Millisecond)
 
 		for _, s := range translated {
 			destFile.WriteString(s.Text)
@@ -93,13 +87,47 @@ func main() {
 	}
 }
 
+func checkArgs(args []string) (string, error) {
+	if 0 == len(args) {
+		printHelp()
+		return "", fmt.Errorf("error: Insufficient argument")
+	}
+
+	fileName := args[0]
+	if _, err := os.Stat(fileName); os.IsNotExist(err) {
+		return "", fmt.Errorf("Error: file '%s' not exist", fileName)
+	}
+	return fileName, nil
+}
+
 func truncateWords(bs []byte, startIndex int) ([]byte, int) {
-	var endIndex int
+	var endIndex, segment, selectedLength int
 	length := len(bs[startIndex:])
+
 	if length <= apiRequestLimit {
 		endIndex = startIndex + length - 1
+		selectedLength = length
 	} else {
 		endIndex = startIndex + apiRequestLimit - 1
+		selectedLength = apiRequestLimit - 1
+	}
+
+	txt := bs[startIndex:endIndex]
+	var i, j int
+	for i = 0; i < selectedLength && segment < textSegmentLimit; i++ {
+		if txt[i] == ' ' {
+			segment++
+			for j = i + 1; j < selectedLength; j++ {
+				if txt[j] != ' ' {
+					break
+				}
+			}
+			i = j
+		}
+	}
+
+	if segment == textSegmentLimit {
+		endIndex = startIndex + i + 1
 	}
 
 	offsetIdx := bytes.LastIndex(bs[startIndex:endIndex+1], []byte{'\n'})
