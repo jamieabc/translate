@@ -77,7 +77,7 @@ func main() {
 			log.Fatalf("error: %v", err)
 		}
 
-		time.Sleep(time.Duration(sleepTimeMS) * time.Millisecond)
+		time.Sleep(time.Duration(sleepTimeMS) * time.Microsecond)
 
 		for _, s := range translated {
 			destFile.WriteString(s.Text)
