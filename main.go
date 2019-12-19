@@ -17,7 +17,7 @@ import (
 const (
 	apiRequestLimit  = 2000 // max total characters per request
 	textSegmentLimit = 128  // max words per request
-	apiRatePerSecond = 5    // aip requests / second
+	apiRatePerSecond = 10   // aip requests / second
 	targetLang       = "zh-TW"
 	outputFile       = "out.txt"
 )
