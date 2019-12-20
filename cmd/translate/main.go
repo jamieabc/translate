@@ -13,13 +13,13 @@ func main() {
 		return
 	}
 
-	gcp, err := translator.NewTranslator(translator.GCP, os.Args[1])
+	gcp, err := translator.NewTranslator(translator.GCP)
 	if nil != err {
 		fmt.Printf("new google cloud translator with error: %s", err)
 		return
 	}
 
-	err = gcp.Initialise()
+	err = gcp.Initialise(os.Args[1])
 	if nil != err {
 		fmt.Printf("goole cloud client initialise with error: %s", err)
 		return

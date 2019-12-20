@@ -31,21 +31,9 @@ type googleCloud struct {
 	content        []byte
 }
 
-func (g *googleCloud) Initialise() error {
+func (g *googleCloud) Initialise(sourceFileName string) error {
 	var err error
-	g.ctx = context.Background()
-
-	// googleCloud client
-	g.client, err = gcp.NewClient(g.ctx)
-	if nil != err {
-		return fmt.Errorf("failed to create googleCloud client: %s", err)
-	}
-
-	// setup translation target language
-	g.lang, err = language.Parse(targetLang)
-	if nil != err {
-		return fmt.Errorf("fail to set Translate destination language: %s", err)
-	}
+	g.sourceFileName = sourceFileName
 
 	g.output, err = os.Create(outputFileName)
 	if nil != err {
@@ -61,10 +49,6 @@ func (g *googleCloud) Initialise() error {
 }
 
 func (g *googleCloud) Translate() error {
-	return g.query()
-}
-
-func (g *googleCloud) query() error {
 	sleepTimeMillisecond := float64(1000) / gcpAPIRateLimit
 
 	startIndex := 0
@@ -132,8 +116,24 @@ func truncateWords(bs []byte, startIndex int) ([]byte, int) {
 	return bs[startIndex : startIndex+offsetIdx+1], startIndex + offsetIdx + 1
 }
 
-func newGCP(sourceFileName string) Translator {
-	return &googleCloud{
-		sourceFileName: sourceFileName,
+func newGCP() (Translator, error) {
+	ctx := context.Background()
+
+	// setup translation target language
+	lang, err := language.Parse(targetLang)
+	if nil != err {
+		return nil, fmt.Errorf("fail to set Translate destination language: %s", err)
 	}
+
+	// googleCloud client
+	client, err := gcp.NewClient(ctx)
+	if nil != err {
+		return nil, fmt.Errorf("failed to create googleCloud client: %s", err)
+	}
+
+	return &googleCloud{
+		ctx:    ctx,
+		lang:   lang,
+		client: client,
+	}, err
 }
