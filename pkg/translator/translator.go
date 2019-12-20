@@ -7,13 +7,13 @@ const (
 )
 
 type Translator interface {
-	Translate(string) error
+	Translate() error
 }
 
-func NewTranslator(platform int) (Translator, error) {
+func NewTranslator(platform int, sourceFileName string) (Translator, error) {
 	switch platform {
 	case GCP:
-		return &googleCloud{}, nil
+		return newGCP(sourceFileName), nil
 	default:
 		return nil, fmt.Errorf("wrong platform")
 	}

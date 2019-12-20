@@ -22,9 +22,11 @@ const (
 	outputFileName  = "out.txt"
 )
 
-type googleCloud struct{}
+type googleCloud struct {
+	sourceFileName string
+}
 
-func (g *googleCloud) Translate(sourceFileName string) error {
+func (g *googleCloud) Translate() error {
 	ctx := context.Background()
 
 	// googleCloud client
@@ -45,7 +47,7 @@ func (g *googleCloud) Translate(sourceFileName string) error {
 	}
 	defer outputFile.Close()
 
-	data, err := ioutil.ReadFile(sourceFileName)
+	data, err := ioutil.ReadFile(g.sourceFileName)
 	if nil != err {
 		return fmt.Errorf("read file %s with error: %s", sourceFileName, err)
 	}
@@ -121,4 +123,10 @@ func truncateWords(bs []byte, startIndex int) ([]byte, int) {
 
 	offsetIdx := bytes.LastIndex(bs[startIndex:endIndex+1], []byte{'\n'})
 	return bs[startIndex : startIndex+offsetIdx+1], startIndex + offsetIdx + 1
+}
+
+func newGCP(sourceFileName string) Translator {
+	return &googleCloud{
+		sourceFileName: sourceFileName,
+	}
 }
