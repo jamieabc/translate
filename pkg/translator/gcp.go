@@ -24,52 +24,59 @@ const (
 
 type googleCloud struct {
 	sourceFileName string
+	ctx            context.Context
+	client         *gcp.Client
+	lang           language.Tag
+	output         *os.File
+	content        []byte
 }
 
-func (g *googleCloud) Translate() error {
-	ctx := context.Background()
+func (g *googleCloud) Initialise() error {
+	var err error
+	g.ctx = context.Background()
 
 	// googleCloud client
-	client, err := gcp.NewClient(ctx)
+	g.client, err = gcp.NewClient(g.ctx)
 	if nil != err {
 		return fmt.Errorf("failed to create googleCloud client: %s", err)
 	}
 
 	// setup translation target language
-	lang, err := language.Parse(targetLang)
+	g.lang, err = language.Parse(targetLang)
 	if nil != err {
 		return fmt.Errorf("fail to set Translate destination language: %s", err)
 	}
 
-	outputFile, err := os.Create(outputFileName)
+	g.output, err = os.Create(outputFileName)
 	if nil != err {
 		return fmt.Errorf("fail to create output file %s with error: %s", outputFileName, err)
 	}
-	defer outputFile.Close()
 
-	data, err := ioutil.ReadFile(g.sourceFileName)
+	g.content, err = ioutil.ReadFile(g.sourceFileName)
 	if nil != err {
 		return fmt.Errorf("read file %s with error: %s", g.sourceFileName, err)
 	}
 
-	err = query(data, outputFile, client, lang, ctx)
-
 	return nil
 }
 
-func query(data []byte, output *os.File, client *gcp.Client, lang language.Tag, ctx context.Context) error {
+func (g *googleCloud) Translate() error {
+	return g.query()
+}
+
+func (g *googleCloud) query() error {
 	sleepTimeMillisecond := float64(1000) / gcpAPIRateLimit
 
 	startIndex := 0
-	for startIndex < len(data)-1 {
-		bs, nextIndex := truncateWords(data, startIndex)
+	for startIndex < len(g.content)-1 {
+		bs, nextIndex := truncateWords(g.content, startIndex)
 		strs := strings.Split(string(bs), "\n")
 		startIndex = nextIndex
 
 		// fmt.Printf("strings to Translate: %s\n\n", strs)
 
 		// Translate
-		translated, err := client.Translate(ctx, strs, lang, nil)
+		translated, err := g.client.Translate(g.ctx, strs, g.lang, nil)
 		if nil != err {
 			return fmt.Errorf("api query error: %v", err)
 		}
@@ -77,12 +84,12 @@ func query(data []byte, output *os.File, client *gcp.Client, lang language.Tag, 
 		time.Sleep(time.Duration(sleepTimeMillisecond) * time.Millisecond)
 
 		for _, s := range translated {
-			_, err = output.WriteString(s.Text)
+			_, err = g.output.WriteString(s.Text)
 			if nil != err {
 				return fmt.Errorf("write file with error: %s", err)
 			}
 		}
-		err = output.Sync()
+		err = g.output.Sync()
 		if nil != err {
 			return fmt.Errorf("sync file %s with error: %s", outputFileName, err)
 		}

@@ -7,6 +7,7 @@ const (
 )
 
 type Translator interface {
+	Initialise() error
 	Translate() error
 }
 

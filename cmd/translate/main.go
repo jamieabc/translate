@@ -19,6 +19,12 @@ func main() {
 		return
 	}
 
+	err = gcp.Initialise()
+	if nil != err {
+		fmt.Printf("goole cloud client initialise with error: %s", err)
+		return
+	}
+
 	err = gcp.Translate()
 	if nil != err {
 		fmt.Printf("google cloud translate with error: %s", err)
