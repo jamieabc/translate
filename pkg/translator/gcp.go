@@ -49,7 +49,7 @@ func (g *googleCloud) Translate() error {
 
 	data, err := ioutil.ReadFile(g.sourceFileName)
 	if nil != err {
-		return fmt.Errorf("read file %s with error: %s", sourceFileName, err)
+		return fmt.Errorf("read file %s with error: %s", g.sourceFileName, err)
 	}
 
 	err = query(data, outputFile, client, lang, ctx)
