@@ -1,11 +1,11 @@
 package translator
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	gcp "cloud.google.com/go/translate"
@@ -31,7 +31,7 @@ type googleCloud struct {
 	client         googleCloudAPI
 	lang           language.Tag
 	output         *os.File
-	content        []byte
+	content        string
 }
 
 func (g *googleCloud) Initialise(sourceFileName string) error {
@@ -43,10 +43,16 @@ func (g *googleCloud) Initialise(sourceFileName string) error {
 		return fmt.Errorf("fail to create output file %s with error: %s", outputFileName, err)
 	}
 
-	g.content, err = ioutil.ReadFile(g.sourceFileName)
+	content, err := ioutil.ReadFile(g.sourceFileName)
 	if nil != err {
 		return fmt.Errorf("read file %s with error: %s", g.sourceFileName, err)
 	}
+
+	var sb strings.Builder
+	for _, b := range content {
+		sb.WriteByte(b)
+	}
+	g.content = sb.String()
 
 	return nil
 }
@@ -55,36 +61,47 @@ func (g *googleCloud) Translate() error {
 	sleepTimeMillisecond := float64(1000) / gcpAPIRateLimit
 
 	startIndex := 0
-	var bs []byte
+	var bs string
 	for startIndex < len(g.content)-1 {
 		bs, startIndex = translatedWords(g.content, startIndex)
 
 		// Translate
-		translated, err := g.client.Translate(g.ctx, []string{string(bs)}, g.lang, nil)
+		translated, err := g.client.Translate(g.ctx, []string{bs}, g.lang, &gcp.Options{
+			Format: gcp.Text,
+		})
 		if nil != err {
 			return fmt.Errorf("api query error: %v", err)
 		}
 
 		time.Sleep(time.Duration(sleepTimeMillisecond) * time.Millisecond)
 
-		for _, s := range translated {
-			_, err = g.output.WriteString(s.Text)
-			if nil != err {
-				return fmt.Errorf("write file with error: %s", err)
-			}
-		}
-		err = g.output.Sync()
-		if nil != err {
-			return fmt.Errorf("sync file %s with error: %s", outputFileName, err)
+		err = writeToFile(translated, err, g)
+		if err != nil {
+			return fmt.Errorf("write error: %s\n", err)
 		}
 	}
 
-	fmt.Printf("total translated: %d\n", len(g.content))
+	fmt.Printf("total translated characters: %d\n", len(g.content))
 
 	return nil
 }
 
-func translatedWords(content []byte, startIndex int) ([]byte, int) {
+func writeToFile(translated []gcp.Translation, err error, g *googleCloud) error {
+	for _, s := range translated {
+		_, err = g.output.WriteString(s.Text)
+		if nil != err {
+			return fmt.Errorf("write to file %s with error: %s", outputFileName, err)
+		}
+	}
+	err = g.output.Sync()
+	if nil != err {
+		return fmt.Errorf("sync file %s with error: %s", outputFileName, err)
+	}
+
+	return nil
+}
+
+func translatedWords(content string, startIndex int) (string, int) {
 	var index int
 	length := len(content)
 
@@ -106,7 +123,7 @@ func translatedWords(content []byte, startIndex int) ([]byte, int) {
 		return content[startIndex:], length
 	}
 
-	offsetIndex := bytes.LastIndex(content[startIndex:index+1], []byte{'.'})
+	offsetIndex := strings.LastIndex(content[startIndex:index+1], ".")
 
 	return content[startIndex : startIndex+offsetIndex+1], startIndex + offsetIndex + 1
 }
