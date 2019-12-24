@@ -9,3 +9,5 @@ Currently set api request each time character limit to 7000, truncate by new lin
 `translate file_name`
 
 `file_name` is expected to text file contains English to translate.
+
+translates file is set to `out.txt`, current cannot not be changed.
