@@ -11,10 +11,10 @@ type Translator interface {
 	Translate() error
 }
 
-func NewTranslator(platform int) (Translator, error) {
+func NewTranslator(platform int, args ...interface{}) (Translator, error) {
 	switch platform {
 	case GCP:
-		return newGCP()
+		return newGCP(args)
 	default:
 		return nil, fmt.Errorf("wrong platform")
 	}

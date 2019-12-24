@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
 	gcp "cloud.google.com/go/translate"
@@ -22,10 +21,14 @@ const (
 	outputFileName  = "out.txt"
 )
 
+type googleCloudAPI interface {
+	Translate(context.Context, []string, language.Tag, *gcp.Options) ([]gcp.Translation, error)
+}
+
 type googleCloud struct {
 	sourceFileName string
 	ctx            context.Context
-	client         *gcp.Client
+	client         googleCloudAPI
 	lang           language.Tag
 	output         *os.File
 	content        []byte
@@ -52,15 +55,12 @@ func (g *googleCloud) Translate() error {
 	sleepTimeMillisecond := float64(1000) / gcpAPIRateLimit
 
 	startIndex := 0
+	var bs []byte
 	for startIndex < len(g.content)-1 {
-		bs, nextIndex := truncateWords(g.content, startIndex)
-		strs := strings.Split(string(bs), "\n")
-		startIndex = nextIndex
-
-		// fmt.Printf("strings to Translate: %s\n\n", strs)
+		bs, startIndex = translatedWords(g.content, startIndex)
 
 		// Translate
-		translated, err := g.client.Translate(g.ctx, strs, g.lang, nil)
+		translated, err := g.client.Translate(g.ctx, []string{string(bs)}, g.lang, nil)
 		if nil != err {
 			return fmt.Errorf("api query error: %v", err)
 		}
@@ -79,44 +79,39 @@ func (g *googleCloud) Translate() error {
 		}
 	}
 
+	fmt.Printf("total translated: %d\n", len(g.content))
+
 	return nil
 }
 
-func truncateWords(bs []byte, startIndex int) ([]byte, int) {
-	var endIndex, segment, selectedLength int
-	length := len(bs[startIndex:])
+func translatedWords(content []byte, startIndex int) ([]byte, int) {
+	var index int
+	length := len(content)
 
-	if length <= gcpPayloadLimit {
-		endIndex = startIndex + length - 1
-		selectedLength = length
-	} else {
-		endIndex = startIndex + gcpPayloadLimit - 1
-		selectedLength = gcpPayloadLimit - 1
-	}
-
-	txt := bs[startIndex:endIndex]
-	var i, j int
-	for i = 0; i < selectedLength && segment < gcpWordLimit; i++ {
-		if txt[i] == ' ' {
-			segment++
-			for j = i + 1; j < selectedLength; j++ {
-				if txt[j] != ' ' {
-					break
-				}
-			}
-			i = j
+	// use 128 words as limitation, since 2000 characters is unlikely to be reached.
+	space := 0
+	for index = startIndex + 1; index < length && space < gcpWordLimit; index++ {
+		if content[index] == ' ' {
+			space++
 		}
 	}
 
-	if segment == gcpWordLimit {
-		endIndex = startIndex + i + 1
+	// check if max characters reached
+	if index-startIndex+1 > gcpPayloadLimit {
+		index = startIndex + gcpPayloadLimit - 1
 	}
 
-	offsetIdx := bytes.LastIndex(bs[startIndex:endIndex+1], []byte{'\n'})
-	return bs[startIndex : startIndex+offsetIdx+1], startIndex + offsetIdx + 1
+	// return if length reached
+	if index >= length-1 {
+		return content[startIndex:], length
+	}
+
+	offsetIndex := bytes.LastIndex(content[startIndex:index+1], []byte{'.'})
+
+	return content[startIndex : startIndex+offsetIndex+1], startIndex + offsetIndex + 1
 }
 
-func newGCP() (Translator, error) {
+func newGCP(args []interface{}) (Translator, error) {
 	ctx := context.Background()
 
 	// setup translation target language
@@ -126,9 +121,14 @@ func newGCP() (Translator, error) {
 	}
 
 	// googleCloud client
-	client, err := gcp.NewClient(ctx)
-	if nil != err {
-		return nil, fmt.Errorf("failed to create googleCloud client: %s", err)
+	var client googleCloudAPI
+	if len(args) > 0 {
+		client = args[0].(googleCloudAPI)
+	} else {
+		client, err = gcp.NewClient(ctx)
+		if nil != err {
+			return nil, fmt.Errorf("failed to create googleCloud client: %s", err)
+		}
 	}
 
 	return &googleCloud{
